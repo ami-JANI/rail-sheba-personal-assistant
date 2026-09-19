@@ -1,0 +1,39 @@
+{
+  "journey": {
+    "from": "Dhaka",
+    "to": "Chattogram",
+    "date": "2026-09-30",
+    "dateInput": "30-Sep-2026",
+    "seatClass": "S_CHAIR",
+    "train": "",
+    "coach": "",
+    "passengerCount": 4
+  },
+  "release": {
+    "at": "2026-09-20T08:00:00+06:00",
+    "openMinutesBefore": 10
+  },
+  "seatPreferences": {
+    "preferredSeatNumbers": [],
+    "tableSeatGroups": [],
+    "allowPartial": false
+  },
+  "execution": {
+    "dryRun": true,
+    "maxSearchAttempts": 1,
+    "stopBeforeReservation": true
+  },
+  "selectors": {
+    "from": "#dest_from",
+    "to": "#dest_to",
+    "date": "#doj",
+    "seatClass": "#choose_class",
+    "searchButton": "button:has-text('SEARCH TRAINS')",
+    "stationOption": "[role='option'], .autocomplete-result, .suggestion-item",
+    "trainCard": ".train-card, .single-trip, [data-train-name]",
+    "trainAction": "button:has-text('BOOK'), button:has-text('VIEW SEATS'), button:has-text('SELECT')",
+    "coachTab": "[role='tab'], .coach-tab, button[data-coach]",
+    "seat": "[data-seat-no], [data-seat-number], button.seat, .seat-item button",
+    "continueButton": "button:has-text('CONTINUE'), button:has-text('BOOK NOW'), button:has-text('PROCEED')"
+  }
+}

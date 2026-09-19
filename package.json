@@ -1,0 +1,20 @@
+{
+  "name": "rail-sheba-personal-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local, single-account Rail Sheba booking assistant that stops before verification and payment.",
+  "type": "module",
+  "scripts": {
+    "setup-session": "node src/setup-session.js",
+    "inspect-seats": "node src/inspect-seat-map.js",
+    "start": "node src/index.js",
+    "dry-run": "node src/index.js --dry-run",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

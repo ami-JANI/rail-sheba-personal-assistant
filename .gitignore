@@ -1,0 +1,6 @@
+node_modules/
+.rail-profile/
+config.json
+artifacts/
+playwright-report/
+test-results/
