@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rail Sheba Assistant</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Rail Sheba Assistant</h1>
+      <p class="notice">Log in normally first. The extension never handles passwords, CAPTCHA or payment.</p>
+
+      <form id="config-form">
+        <div class="grid">
+          <label>From<input id="from" required /></label>
+          <label>To<input id="to" required /></label>
+        </div>
+
+        <div class="grid">
+          <label>Journey date<input id="dateInput" placeholder="30-Sep-2026" required /></label>
+          <label>
+            Class
+            <select id="seatClass">
+              <option>AC_B</option>
+              <option>AC_S</option>
+              <option>SNIGDHA</option>
+              <option>F_BERTH</option>
+              <option>F_SEAT</option>
+              <option>F_CHAIR</option>
+              <option selected>S_CHAIR</option>
+              <option>SHOVAN</option>
+              <option>SHULOV</option>
+              <option>AC_CHAIR</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid">
+          <label>Train<input id="train" placeholder="Exact train name" /></label>
+          <label>Coach<input id="coach" placeholder="Optional" /></label>
+        </div>
+
+        <div class="grid">
+          <label>Seats<input id="passengerCount" type="number" min="1" max="4" required /></label>
+          <label>Release time<input id="releaseAt" type="datetime-local" required /></label>
+        </div>
+
+        <label>Preferred seats<input id="preferredSeatNumbers" placeholder="A1, A2, A3, A4" /></label>
+        <label>
+          Table groups
+          <textarea id="tableSeatGroups" rows="3" placeholder="A1, A2, B1, B2&#10;C1, C2, D1, D2"></textarea>
+        </label>
+
+        <label class="checkbox"><input id="dryRun" type="checkbox" checked /> Dry run—plan without clicking seats</label>
+
+        <div class="actions">
+          <button type="submit">Save</button>
+          <button id="run-now" type="button">Run now</button>
+          <button id="arm" type="button" class="primary">Arm</button>
+          <button id="disarm" type="button">Disarm</button>
+        </div>
+      </form>
+
+      <output id="status">Loading…</output>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

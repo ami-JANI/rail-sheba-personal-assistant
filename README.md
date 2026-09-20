@@ -1,6 +1,6 @@
 # Rail Sheba Personal Assistant
 
-A local, single-account browser assistant for Bangladesh Railway's official e-ticket website.
+A local, single-account browser assistant for Bangladesh Railway's official e-ticket website. The recommended version is an unpacked Edge/Chrome extension that runs in your normal signed-in browser session. A Playwright prototype remains under `src/` for development, but Cloudflare may reject automated browsers.
 
 It prepares a journey, performs **one** scheduled search, ranks available seats, and can select them in this order:
 
@@ -12,7 +12,20 @@ It prepares a journey, performs **one** scheduled search, ranks available seats,
 
 The assistant deliberately stops before reservation confirmation, CAPTCHA and payment. It does not call undocumented APIs, solve CAPTCHAs, rotate IP addresses, create accounts, or retry aggressively.
 
-## Setup
+## Recommended setup: normal Edge extension
+
+1. Open Rail Sheba in your normal Edge browser and log in manually.
+2. Open `edge://extensions`.
+3. Enable **Developer mode**.
+4. Click **Load unpacked** and select this repository's `extension` folder.
+5. Pin **Rail Sheba Personal Assistant** to the toolbar.
+6. Open its popup, enter the journey, train, release time, and seat preferences.
+7. Keep **Dry run** enabled and click **Run now** for the first test.
+8. When the dry run works, disable it and click **Arm** for a future release time.
+
+The extension submits one search and one seat-selection pass. It does not automate login, Cloudflare verification, CAPTCHA, reservation confirmation, or payment.
+
+## Playwright prototype setup
 
 1. Install Node.js 20 or newer and Google Chrome or Microsoft Edge.
 2. Run `npm install`.
@@ -40,7 +53,7 @@ Do not put a password, OTP, card number or NID in `config.json`.
 
 Table layouts and seat labels vary by train and coach. Add groups that match the labels displayed by the official seat map.
 
-## First run
+## Playwright prototype first run
 
 Keep `execution.dryRun` set to `true` and run:
 
@@ -68,4 +81,4 @@ Navigate to a seat map manually and press Enter. The command writes non-sensitiv
 
 ## Cloudflare verification
 
-The browser is launched with Chromium's security sandbox enabled. If the login page still shows **Verification failed**, stop the assistant and use the official site in a normal browser. Do not repeatedly retry the challenge. This project does not hide automation, bypass Cloudflare, or solve its verification challenge.
+The Playwright browser is launched with Chromium's security sandbox enabled. If its login page still shows **Verification failed** or error `600010`, stop it and use the Edge extension in a normal signed-in browser. Do not repeatedly retry the challenge. This project does not hide automation, bypass Cloudflare, or solve its verification challenge.

@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Rail Sheba Personal Assistant",
+  "version": "0.2.0",
+  "description": "Prepare one scheduled Rail Sheba search and rank seats in your normal browser session.",
+  "permissions": ["alarms", "storage", "tabs"],
+  "host_permissions": ["https://eticket.railway.gov.bd/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Rail Sheba Assistant",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://eticket.railway.gov.bd/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
