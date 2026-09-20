@@ -58,6 +58,7 @@ Do not put a password, OTP, card number or NID in `config.json`.
 
 Table layouts and seat labels vary by train and coach. Add groups that match the labels displayed by the official seat map.
 The current Railway seat map uses white `btn-seat seat-available` tiles for available seats and orange `seat-booked` tiles for occupied seats; the extension ignores booked, disabled, hidden, selected and pending tiles.
+When Coach is blank, the extension reads Railway's `Select Coach` availability counts and chooses the coach with the most available seats. Entering a coach name forces that coach and produces an error if it has no availability.
 
 ## Playwright prototype first run
 

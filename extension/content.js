@@ -8,7 +8,7 @@ const SELECTORS = {
   searchButton: "button",
   trainCard: "app-train-card, .train-card, .single-trip, .train-item, [data-train-name]",
   trainAction: "button",
-  coachTab: ".seat-floor-btn, [role='tab'], .coach-tab, button[data-coach]",
+  coachTab: "#select-bogie, .seat-floor-btn, [role='tab'], .coach-tab, button[data-coach]",
   seat: "button.btn-seat, button[ticketid][routeid], [data-seat-no], [data-seat-number], button.seat, .seat-item button",
 };
 
@@ -377,6 +377,21 @@ function seatConfirmed(label, fallbackElement) {
   );
 }
 
+function selectedSeatLabelsOnPage() {
+  const labels = [
+    ...[...document.querySelectorAll(SELECTORS.seat)]
+      .filter((element) => element.classList.contains("seat-selected"))
+      .map((element) => element.getAttribute("title") ?? element.textContent?.trim()),
+    ...[...document.querySelectorAll(".single-selected-seat-btn")].map(
+      (element) => element.textContent?.trim(),
+    ),
+    ...[...document.querySelectorAll("#tbl_seat_list tbody tr td:nth-child(2)")].map(
+      (element) => element.textContent?.trim(),
+    ),
+  ].filter(Boolean);
+  return [...new Map(labels.map((label) => [normalize(label), label])).values()];
+}
+
 async function waitForSeatReservation(seat) {
   const started = Date.now();
   while (Date.now() - started < 12000) {
@@ -392,6 +407,65 @@ async function waitForSeatReservation(seat) {
     await delay(100);
   }
   throw new Error(`Rail Sheba did not confirm reservation of ${seat.label} within 12 seconds.`);
+}
+
+function coachAvailability(option) {
+  const match = option.textContent?.match(/-\s*(\d+)\s*Seat(?:\(s\))?/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function coachName(option) {
+  return option.textContent?.replace(/-\s*\d+\s*Seat(?:\(s\))?.*$/i, "").trim() ?? "";
+}
+
+async function chooseCoach(requestedCoach) {
+  const select = document.querySelector("#select-bogie");
+  if (select instanceof HTMLSelectElement) {
+    const options = [...select.options].filter((option) => option.value !== "");
+    if (!options.length) throw new Error("Rail Sheba did not provide any coach options.");
+
+    let target;
+    if (requestedCoach) {
+      const wanted = normalize(requestedCoach);
+      target = options.find((option) => normalize(coachName(option)) === wanted);
+      if (!target) throw new Error(`Coach not found: ${requestedCoach}`);
+    } else {
+      const selectedPrefix = selectedSeatLabelsOnPage()[0]?.split(/[-_/]/)[0];
+      const selectedCoach = selectedPrefix
+        ? options.find((option) => normalize(coachName(option)) === normalize(selectedPrefix))
+        : null;
+      target =
+        selectedCoach && coachAvailability(selectedCoach) > 0
+          ? selectedCoach
+          : options.sort((a, b) => coachAvailability(b) - coachAvailability(a))[0];
+    }
+
+    const available = coachAvailability(target);
+    if (available < 1) {
+      throw new Error(`Coach ${coachName(target) || target.textContent.trim()} has no available seats.`);
+    }
+    if (select.value !== target.value) {
+      setNativeValue(select, target.value);
+      await waitForCondition(
+        () => select.value === target.value && document.querySelector("button.btn-seat.seat-available"),
+        `Rail Sheba did not load available seats for coach ${coachName(target)}.`,
+        5000,
+      );
+    }
+    return coachName(target);
+  }
+
+  const coachControls = [...document.querySelectorAll(SELECTORS.coachTab)].filter(
+    (candidate) => candidate.offsetParent !== null && !(candidate instanceof HTMLSelectElement),
+  );
+  if (requestedCoach) {
+    const coach = coachControls.find((candidate) =>
+      candidate.textContent?.toLowerCase().includes(requestedCoach.toLowerCase()),
+    );
+    if (!coach) throw new Error(`Coach not found: ${requestedCoach}`);
+    coach.click();
+  }
+  return requestedCoach || "active coach";
 }
 
 async function chooseTrain(config) {
@@ -472,29 +546,21 @@ async function run(config) {
 
   if (!(await chooseTrain(config))) return { message: "Search submitted; choose a train manually." };
 
-  if (config.coach) {
-    await waitForSelector(SELECTORS.coachTab, 10000).catch(() => null);
-    const coach = [...document.querySelectorAll(SELECTORS.coachTab)].find((candidate) =>
-      candidate.textContent?.toLowerCase().includes(config.coach.toLowerCase()),
-    );
-    coach?.click();
-  }
-
+  await waitForSelector(SELECTORS.coachTab, 10000).catch(() => null);
+  await chooseCoach(config.coach);
   await waitForSelector(SELECTORS.seat, 15000);
   const seatElements = [...document.querySelectorAll(SELECTORS.seat)];
   const seatRecords = seatElements.map(seatRecord);
-  const alreadySelected = seatRecords.filter((seat) =>
-    seat.element.classList.contains("seat-selected"),
-  );
-  if (alreadySelected.length > config.passengerCount) {
+  const existingLabels = selectedSeatLabelsOnPage();
+  if (existingLabels.length > config.passengerCount) {
     throw new Error(
-      `${alreadySelected.length} seats are already selected, but the requested total is ${config.passengerCount}. Deselect extras manually.`,
+      `${existingLabels.length} seats are already selected, but the requested total is ${config.passengerCount}. Deselect extras manually.`,
     );
   }
 
-  const remainingCount = config.passengerCount - alreadySelected.length;
+  const remainingCount = config.passengerCount - existingLabels.length;
   if (remainingCount === 0) {
-    const labels = alreadySelected.map((seat) => seat.label).join(", ");
+    const labels = existingLabels.join(", ");
     showStatus(`Requested seats are already reserved on this page: ${labels}\nClick CONTINUE PURCHASE manually.`);
     return { message: `Seats already reserved on this page: ${labels}` };
   }
@@ -502,7 +568,6 @@ async function run(config) {
   const plan = planSeats(seatRecords, { ...config, passengerCount: remainingCount });
   if (!plan.selected.length) throw new Error("No acceptable set of available seats was found.");
 
-  const existingLabels = alreadySelected.map((seat) => seat.label);
   const plannedLabels = plan.selected.map((seat) => seat.label);
   const labels = [...existingLabels, ...plannedLabels].join(", ");
   if (config.dryRun) {
@@ -517,10 +582,7 @@ async function run(config) {
       seat.element.click();
       await waitForSeatReservation(seat);
     } catch (error) {
-      const confirmed = [...document.querySelectorAll(SELECTORS.seat)]
-        .filter((element) => element.classList.contains("seat-selected"))
-        .map((element) => element.getAttribute("title") ?? element.textContent?.trim())
-        .filter(Boolean);
+      const confirmed = selectedSeatLabelsOnPage();
       throw new Error(
         `${error.message} Confirmed so far: ${confirmed.join(", ") || "none"}. Run again to fill the remaining seats.`,
       );
