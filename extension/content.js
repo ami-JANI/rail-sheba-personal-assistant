@@ -76,6 +76,12 @@ async function waitForCondition(predicate, errorMessage, timeout = 15000) {
 
 async function fillAutocomplete(selector, value) {
   const input = await waitForSelector(selector);
+  input.click();
+  await waitForCondition(
+    () => !input.readOnly,
+    `Rail Sheba did not activate the station field for "${value}".`,
+    3000,
+  );
   input.focus();
   setNativeValue(input, "");
   setNativeValue(input, value);
