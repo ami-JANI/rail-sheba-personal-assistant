@@ -68,6 +68,20 @@ function officialPageIsBlocked() {
   return /verification failed|cloudflare|error code:\s*600010/i.test(text);
 }
 
+function seatSelectionLockout() {
+  const text = document.body?.innerText ?? "";
+  if (!/seat selection is temporarily disabled due to repeated attempts/i.test(text)) return null;
+  const retry = text.match(/please try again after\s+([^\n.]+(?:AM|PM))/i)?.[1]?.trim();
+  return retry
+    ? `Rail Sheba has temporarily disabled seat selection due to repeated attempts. Do not retry before ${retry}.`
+    : "Rail Sheba has temporarily disabled seat selection due to repeated attempts. Wait until the time shown by Railway before retrying.";
+}
+
+function assertSeatSelectionAllowed() {
+  const message = seatSelectionLockout();
+  if (message) throw new Error(message);
+}
+
 function signedIn() {
   return !document.querySelector('a[href="/login"]');
 }
@@ -395,6 +409,7 @@ function selectedSeatLabelsOnPage() {
 async function waitForSeatReservation(seat) {
   const started = Date.now();
   while (Date.now() - started < 12000) {
+    assertSeatSelectionAllowed();
     if (seatConfirmed(seat.label, seat.element)) return;
     const tile = currentSeatElement(seat.label) ?? seat.element;
     const pending = tile?.classList.contains("request_pending");
@@ -519,6 +534,7 @@ async function chooseTrain(config) {
 async function run(config) {
   config = { ...config, ...searchConfigFromLocation() };
   if (officialPageIsBlocked()) throw new Error("Cloudflare verification failed. Use the normal login page manually.");
+  assertSeatSelectionAllowed();
   if (!signedIn()) throw new Error("Log in normally before running the assistant.");
   if (location.pathname === "/") {
     showStatus("Preparing journey…");
@@ -546,7 +562,10 @@ async function run(config) {
 
   if (!(await chooseTrain(config))) return { message: "Search submitted; choose a train manually." };
 
+  await delay(250);
+  assertSeatSelectionAllowed();
   await waitForSelector(SELECTORS.coachTab, 10000).catch(() => null);
+  assertSeatSelectionAllowed();
   await chooseCoach(config.coach);
   await waitForSelector(SELECTORS.seat, 15000);
   const seatElements = [...document.querySelectorAll(SELECTORS.seat)];
@@ -579,6 +598,7 @@ async function run(config) {
 
   for (const seat of plan.selected) {
     try {
+      assertSeatSelectionAllowed();
       seat.element.click();
       await waitForSeatReservation(seat);
     } catch (error) {

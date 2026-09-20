@@ -83,6 +83,7 @@ Navigate to a seat map manually and press Enter. The command writes non-sensitiv
 - One account and one search attempt per run.
 - Maximum four requested seats.
 - No automated password entry, CAPTCHA solving, reservation confirmation or payment.
+- If Railway temporarily disables seat selection after repeated attempts, the extension stops immediately and reports Railway's retry time. It does not bypass or repeatedly probe the cooldown.
 - No guarantee of availability; the Railway server is authoritative.
 - The website can change at any time, requiring selector calibration.
 
