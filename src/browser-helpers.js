@@ -29,6 +29,7 @@ export async function launchRailBrowser() {
   const channel = installedBrowserChannel();
   return chromium.launchPersistentContext(profilePath, {
     ...(channel ? { channel } : {}),
+    chromiumSandbox: true,
     headless: false,
     viewport: null,
     args: ["--start-maximized"],
@@ -51,6 +52,11 @@ export async function ensureSignedIn(page) {
     console.log("Railway session is not signed in. Log in manually in the opened Chrome window.");
     await loginLink.click();
     await waitForEnter("Finish login, including any OTP or CAPTCHA.");
+    if (await page.getByText(/verification failed/i).isVisible().catch(() => false)) {
+      throw new Error(
+        "Cloudflare rejected the automated browser. Close it and use the official site in a normal browser; this assistant will not bypass Cloudflare verification.",
+      );
+    }
     await page.goto(HOME_URL, { waitUntil: "domcontentloaded" });
   }
 }

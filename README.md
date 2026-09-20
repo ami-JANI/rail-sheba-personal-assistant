@@ -65,3 +65,7 @@ Navigate to a seat map manually and press Enter. The command writes non-sensitiv
 - No automated password entry, CAPTCHA solving, reservation confirmation or payment.
 - No guarantee of availability; the Railway server is authoritative.
 - The website can change at any time, requiring selector calibration.
+
+## Cloudflare verification
+
+The browser is launched with Chromium's security sandbox enabled. If the login page still shows **Verification failed**, stop the assistant and use the official site in a normal browser. Do not repeatedly retry the challenge. This project does not hide automation, bypass Cloudflare, or solve its verification challenge.
