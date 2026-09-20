@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rail Sheba Personal Assistant",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Prepare one scheduled Rail Sheba search and rank seats in your normal browser session.",
   "permissions": ["alarms", "storage", "tabs"],
   "host_permissions": ["https://eticket.railway.gov.bd/*"],

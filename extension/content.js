@@ -3,9 +3,10 @@ const SELECTORS = {
   to: "#dest_to",
   date: "#doj",
   seatClass: "#choose_class",
-  stationOption: "[role='option'], .autocomplete-result, .suggestion-item",
+  stationOption:
+    ".ui-autocomplete .ui-menu-item > a, .ui-menu-item > a, [role='option'], .autocomplete-result, .suggestion-item",
   searchButton: "button",
-  trainCard: ".train-card, .single-trip, [data-train-name]",
+  trainCard: "app-train-card, .train-card, .single-trip, .train-item, [data-train-name]",
   trainAction: "button",
   coachTab: "[role='tab'], .coach-tab, button[data-coach]",
   seat: "[data-seat-no], [data-seat-number], button.seat, .seat-item button",
@@ -64,21 +65,126 @@ async function waitForSelector(selector, timeout = 15000) {
   throw new Error(`Timed out waiting for ${selector}`);
 }
 
+async function waitForCondition(predicate, errorMessage, timeout = 15000) {
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    if (predicate()) return;
+    await delay(100);
+  }
+  throw new Error(errorMessage);
+}
+
 async function fillAutocomplete(selector, value) {
   const input = await waitForSelector(selector);
   input.focus();
+  setNativeValue(input, "");
   setNativeValue(input, value);
-  await delay(450);
+  const wanted = value.trim().toLowerCase();
+  let match;
+  await waitForCondition(() => {
+    const options = [...document.querySelectorAll(SELECTORS.stationOption)].filter(
+      (option) => option.offsetParent !== null,
+    );
+    const exact = options.find((option) => option.textContent?.trim().toLowerCase() === wanted);
+    const partial = options.find((option) => option.textContent?.trim().toLowerCase().includes(wanted));
+    match = exact ?? partial;
+    return Boolean(match);
+  }, `Rail Sheba did not offer a station matching "${value}".`, 5000);
+  match.click();
+  await waitForCondition(
+    () => input.value.trim().toLowerCase() === wanted,
+    `Rail Sheba did not accept the station "${value}".`,
+    3000,
+  );
+}
 
-  const options = [...document.querySelectorAll(SELECTORS.stationOption)];
-  const exact = options.find((option) => option.textContent?.trim().toLowerCase() === value.toLowerCase());
-  const partial = options.find((option) => option.textContent?.toLowerCase().includes(value.toLowerCase()));
-  const match = exact ?? partial;
-  if (match) match.click();
-  else {
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+const MONTHS = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+
+function parseJourneyDate(value) {
+  const text = value.trim();
+  let match = text.match(/^(\d{1,2})[-/]([A-Za-z]{3,9})[-/](\d{4})$/);
+  if (match) {
+    const month = MONTHS.findIndex((name) => name.startsWith(match[2].toLowerCase()));
+    if (month >= 0) return { day: Number(match[1]), month, year: Number(match[3]) };
   }
+
+  match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) return { day: Number(match[1]), month: Number(match[2]) - 1, year: Number(match[3]) };
+
+  match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (match) return { day: Number(match[3]), month: Number(match[2]) - 1, year: Number(match[1]) };
+
+  throw new Error(`Journey date "${value}" must look like 21-Sep-2026, 21/09/2026, or 2026-09-21.`);
+}
+
+function validDateParts({ day, month, year }) {
+  const candidate = new Date(year, month, day);
+  return (
+    candidate.getFullYear() === year &&
+    candidate.getMonth() === month &&
+    candidate.getDate() === day
+  );
+}
+
+async function selectJourneyDate(value) {
+  const target = parseJourneyDate(value);
+  if (!validDateParts(target)) throw new Error(`Journey date "${value}" is not a valid calendar date.`);
+
+  const input = await waitForSelector(SELECTORS.date);
+  input.focus();
+  input.click();
+  const picker = await waitForSelector("#ui-datepicker-div", 5000);
+  await waitForCondition(
+    () => picker.offsetParent !== null,
+    "Rail Sheba's journey calendar did not open.",
+    5000,
+  );
+
+  const targetIndex = target.year * 12 + target.month;
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const monthName = picker.querySelector(".ui-datepicker-month")?.textContent?.trim().toLowerCase();
+    const year = Number(picker.querySelector(".ui-datepicker-year")?.textContent?.trim());
+    const month = MONTHS.indexOf(monthName);
+    if (month < 0 || !Number.isInteger(year)) {
+      throw new Error("Could not read Rail Sheba's journey calendar.");
+    }
+
+    const currentIndex = year * 12 + month;
+    if (currentIndex === targetIndex) break;
+    const direction = currentIndex < targetIndex ? ".ui-datepicker-next" : ".ui-datepicker-prev";
+    const control = picker.querySelector(direction);
+    if (!control || control.classList.contains("ui-state-disabled")) {
+      throw new Error(`Journey date "${value}" is outside Rail Sheba's selectable range.`);
+    }
+    control.click();
+    await delay(80);
+  }
+
+  const dayLinks = [...picker.querySelectorAll(
+    `td[data-handler="selectDay"][data-year="${target.year}"][data-month="${target.month}"] a`,
+  )];
+  const dayLink = dayLinks.find((link) => Number(link.textContent?.trim()) === target.day);
+  if (!dayLink) throw new Error(`Journey date "${value}" is not currently selectable on Rail Sheba.`);
+  dayLink.click();
+
+  await waitForCondition(
+    () => input.value.trim().length > 0 && picker.offsetParent === null,
+    `Rail Sheba did not accept journey date "${value}".`,
+    3000,
+  );
 }
 
 function visibleButtons() {
@@ -195,12 +301,34 @@ async function chooseTrain(config) {
     showStatus("Search submitted. Select a train manually because no train name is configured.");
     return false;
   }
-  await waitForSelector(SELECTORS.trainCard, 20000);
-  const cards = [...document.querySelectorAll(SELECTORS.trainCard)];
-  const card = cards.find((candidate) =>
-    candidate.textContent?.toLowerCase().includes(config.train.toLowerCase()),
+  const wanted = config.train.trim().toLowerCase();
+  await waitForCondition(
+    () => document.body?.innerText.toLowerCase().includes(wanted),
+    `Train not found after the search: ${config.train}`,
+    20000,
   );
-  if (!card) throw new Error(`Train not found: ${config.train}`);
+
+  const cards = [...document.querySelectorAll(SELECTORS.trainCard)].filter(
+    (candidate) => candidate.offsetParent !== null && candidate.textContent?.toLowerCase().includes(wanted),
+  );
+  let card = cards.sort((a, b) => a.textContent.length - b.textContent.length)[0];
+
+  if (!card) {
+    const labels = [...document.querySelectorAll("h1, h2, h3, h4, h5, strong, b, p, span, div")]
+      .filter((candidate) => candidate.offsetParent !== null)
+      .filter((candidate) => candidate.textContent?.trim().toLowerCase().includes(wanted))
+      .sort((a, b) => a.textContent.length - b.textContent.length);
+    const candidates = [];
+    for (const label of labels.slice(0, 20)) {
+      let ancestor = label;
+      for (let depth = 0; ancestor && depth < 8; depth += 1, ancestor = ancestor.parentElement) {
+        if (buttonByText(/book|view seats|select/i, ancestor)) candidates.push(ancestor);
+      }
+    }
+    card = candidates.sort((a, b) => a.textContent.length - b.textContent.length)[0];
+  }
+
+  if (!card) throw new Error(`Found ${config.train}, but could not identify its result card.`);
   const action = buttonByText(/book|view seats|select/i, card);
   if (!action) throw new Error(`No seat-selection button found for ${config.train}.`);
   action.click();
@@ -215,13 +343,18 @@ async function run(config) {
   showStatus("Preparing journey…");
   await fillAutocomplete(SELECTORS.from, config.from);
   await fillAutocomplete(SELECTORS.to, config.to);
-  setNativeValue(await waitForSelector(SELECTORS.date), config.dateInput);
+  await selectJourneyDate(config.dateInput);
 
   const classSelect = await waitForSelector(SELECTORS.seatClass);
   setNativeValue(classSelect, config.seatClass);
 
   const search = buttonByText(/search trains/i) ?? visibleButtons().find((button) => button.type === "submit");
   if (!search) throw new Error("Search Trains button was not found.");
+  await waitForCondition(
+    () => !search.disabled && search.getAttribute("aria-disabled") !== "true",
+    "Rail Sheba kept Search Trains disabled. Recheck the selected From, To, journey date and class.",
+    5000,
+  );
   showStatus("Submitting one journey search…");
   search.click();
 
