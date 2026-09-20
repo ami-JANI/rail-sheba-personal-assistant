@@ -355,6 +355,45 @@ function planSeats(seats, config) {
   };
 }
 
+function currentSeatElement(label) {
+  const wanted = normalize(label);
+  return [...document.querySelectorAll(SELECTORS.seat)].find((element) => {
+    const candidate =
+      element.getAttribute("data-seat-no") ??
+      element.getAttribute("data-seat-number") ??
+      element.getAttribute("title") ??
+      element.getAttribute("aria-label") ??
+      element.textContent?.trim() ??
+      "";
+    return normalize(candidate) === wanted;
+  });
+}
+
+function seatConfirmed(label, fallbackElement) {
+  const tile = currentSeatElement(label) ?? fallbackElement;
+  if (tile?.classList.contains("seat-selected")) return true;
+  return [...document.querySelectorAll(".single-selected-seat-btn")].some(
+    (selected) => normalize(selected.textContent) === normalize(label),
+  );
+}
+
+async function waitForSeatReservation(seat) {
+  const started = Date.now();
+  while (Date.now() - started < 12000) {
+    if (seatConfirmed(seat.label, seat.element)) return;
+    const tile = currentSeatElement(seat.label) ?? seat.element;
+    const pending = tile?.classList.contains("request_pending");
+    const rejected =
+      tile?.classList.contains("seat-booked") ||
+      (tile?.disabled && !tile?.classList.contains("seat-selected"));
+    if (rejected && !pending) {
+      throw new Error(`Rail Sheba did not reserve ${seat.label}; it is no longer available.`);
+    }
+    await delay(100);
+  }
+  throw new Error(`Rail Sheba did not confirm reservation of ${seat.label} within 12 seconds.`);
+}
+
 async function chooseTrain(config) {
   if (!config.train) {
     showStatus("Search submitted. Select a train manually because no train name is configured.");
@@ -438,12 +477,30 @@ async function run(config) {
   if (!plan.selected.length) throw new Error("No acceptable set of available seats was found.");
 
   const labels = plan.selected.map((seat) => seat.label).join(", ");
-  if (!config.dryRun) {
-    for (const seat of plan.selected) seat.element.click();
+  if (config.dryRun) {
+    showStatus(
+      `Dry run only—no seats were clicked.\nWould select: ${labels}\nStrategy: ${plan.strategy}`,
+    );
+    return { message: `Dry run only; would select: ${labels}` };
   }
-  const prefix = config.dryRun ? "Dry run" : "Seats selected";
-  showStatus(`${prefix}: ${labels}\nStrategy: ${plan.strategy}\nReview manually; CAPTCHA, confirmation and payment are not automated.`);
-  return { message: `${prefix}: ${labels}` };
+
+  for (const seat of plan.selected) seat.element.click();
+  const confirmations = await Promise.allSettled(plan.selected.map(waitForSeatReservation));
+  const failures = confirmations
+    .map((result, index) => (result.status === "rejected" ? plan.selected[index].label : null))
+    .filter(Boolean);
+  if (failures.length) {
+    const confirmed = plan.selected
+      .filter((_seat, index) => confirmations[index].status === "fulfilled")
+      .map((seat) => seat.label);
+    throw new Error(
+      `Rail Sheba confirmed ${confirmed.join(", ") || "no seats"}; failed: ${failures.join(", ")}. Review the seat map before continuing.`,
+    );
+  }
+  showStatus(
+    `Seats reserved on this page: ${labels}\nStrategy: ${plan.strategy}\nClick CONTINUE PURCHASE manually; passenger confirmation, CAPTCHA and payment are not automated.`,
+  );
+  return { message: `Seats reserved on this page: ${labels}` };
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

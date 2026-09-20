@@ -28,6 +28,7 @@ You can also search manually on Rail Sheba first and leave its train-results pag
 After pulling an update, return to `edge://extensions` and click **Reload** on the unpacked extension before testing it again.
 
 The extension submits one search and one seat-selection pass. It does not automate login, Cloudflare verification, CAPTCHA, reservation confirmation, or payment.
+In Dry run mode it only reports which seats it would choose. With Dry run disabled, it clicks seats one at a time and waits for Rail Sheba to mark each tile as selected before reporting success. You must then review the total and click **CONTINUE PURCHASE** manually.
 
 ## Playwright prototype setup
 
