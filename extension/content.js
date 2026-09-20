@@ -420,13 +420,22 @@ async function chooseTrain(config) {
     for (const label of labels.slice(0, 20)) {
       let ancestor = label;
       for (let depth = 0; ancestor && depth < 8; depth += 1, ancestor = ancestor.parentElement) {
-        if (buttonByText(/book|view seats|select/i, ancestor)) candidates.push(ancestor);
+        if (
+          buttonByText(/book|view seats|select/i, ancestor) ||
+          ancestor.querySelector(SELECTORS.seat)
+        ) {
+          candidates.push(ancestor);
+        }
       }
     }
     card = candidates.sort((a, b) => a.textContent.length - b.textContent.length)[0];
   }
 
   if (!card) throw new Error(`Found ${config.train}, but could not identify its result card.`);
+  const openSeatMap = [...card.querySelectorAll(SELECTORS.seat)].some(
+    (seat) => seat.offsetParent !== null,
+  );
+  if (openSeatMap) return true;
   const action = classAction(card, config.seatClass) ?? buttonByText(/book|view seats|select/i, card);
   if (!action) throw new Error(`No seat-selection button found for ${config.train}.`);
   action.click();
@@ -473,29 +482,49 @@ async function run(config) {
 
   await waitForSelector(SELECTORS.seat, 15000);
   const seatElements = [...document.querySelectorAll(SELECTORS.seat)];
-  const plan = planSeats(seatElements.map(seatRecord), config);
-  if (!plan.selected.length) throw new Error("No acceptable set of available seats was found.");
-
-  const labels = plan.selected.map((seat) => seat.label).join(", ");
-  if (config.dryRun) {
-    showStatus(
-      `Dry run only—no seats were clicked.\nWould select: ${labels}\nStrategy: ${plan.strategy}`,
+  const seatRecords = seatElements.map(seatRecord);
+  const alreadySelected = seatRecords.filter((seat) =>
+    seat.element.classList.contains("seat-selected"),
+  );
+  if (alreadySelected.length > config.passengerCount) {
+    throw new Error(
+      `${alreadySelected.length} seats are already selected, but the requested total is ${config.passengerCount}. Deselect extras manually.`,
     );
-    return { message: `Dry run only; would select: ${labels}` };
   }
 
-  for (const seat of plan.selected) seat.element.click();
-  const confirmations = await Promise.allSettled(plan.selected.map(waitForSeatReservation));
-  const failures = confirmations
-    .map((result, index) => (result.status === "rejected" ? plan.selected[index].label : null))
-    .filter(Boolean);
-  if (failures.length) {
-    const confirmed = plan.selected
-      .filter((_seat, index) => confirmations[index].status === "fulfilled")
-      .map((seat) => seat.label);
-    throw new Error(
-      `Rail Sheba confirmed ${confirmed.join(", ") || "no seats"}; failed: ${failures.join(", ")}. Review the seat map before continuing.`,
+  const remainingCount = config.passengerCount - alreadySelected.length;
+  if (remainingCount === 0) {
+    const labels = alreadySelected.map((seat) => seat.label).join(", ");
+    showStatus(`Requested seats are already reserved on this page: ${labels}\nClick CONTINUE PURCHASE manually.`);
+    return { message: `Seats already reserved on this page: ${labels}` };
+  }
+
+  const plan = planSeats(seatRecords, { ...config, passengerCount: remainingCount });
+  if (!plan.selected.length) throw new Error("No acceptable set of available seats was found.");
+
+  const existingLabels = alreadySelected.map((seat) => seat.label);
+  const plannedLabels = plan.selected.map((seat) => seat.label);
+  const labels = [...existingLabels, ...plannedLabels].join(", ");
+  if (config.dryRun) {
+    showStatus(
+      `Dry run only—no new seats were clicked.\nAlready reserved: ${existingLabels.join(", ") || "none"}\nWould add: ${plannedLabels.join(", ")}\nStrategy: ${plan.strategy}`,
     );
+    return { message: `Dry run only; would add: ${plannedLabels.join(", ")}` };
+  }
+
+  for (const seat of plan.selected) {
+    try {
+      seat.element.click();
+      await waitForSeatReservation(seat);
+    } catch (error) {
+      const confirmed = [...document.querySelectorAll(SELECTORS.seat)]
+        .filter((element) => element.classList.contains("seat-selected"))
+        .map((element) => element.getAttribute("title") ?? element.textContent?.trim())
+        .filter(Boolean);
+      throw new Error(
+        `${error.message} Confirmed so far: ${confirmed.join(", ") || "none"}. Run again to fill the remaining seats.`,
+      );
+    }
   }
   showStatus(
     `Seats reserved on this page: ${labels}\nStrategy: ${plan.strategy}\nClick CONTINUE PURCHASE manually; passenger confirmation, CAPTCHA and payment are not automated.`,
