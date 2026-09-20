@@ -98,7 +98,9 @@ if (initial?.ok) {
   setStatus(
     initial.armedFor
       ? `Armed for ${new Date(initial.armedFor).toLocaleString()}`
-      : "Not armed. Test with Dry run and Run now first.",
+      : initial.pageSearch
+        ? `Using open search: ${initial.pageSearch.from} → ${initial.pageSearch.to}, ${initial.pageSearch.dateInput}, ${initial.pageSearch.seatClass}.`
+        : "Not armed. Test with Dry run and Run now first.",
   );
 } else {
   setStatus(initial?.error ?? "Could not load configuration.", true);

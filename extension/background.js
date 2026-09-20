@@ -1,5 +1,6 @@
 const HOME_URL = "https://eticket.railway.gov.bd/";
 const ALARM_NAME = "rail-sheba-release";
+const SEARCH_PATH = "/booking/train/search";
 
 const DEFAULT_CONFIG = {
   from: "Dhaka",
@@ -41,6 +42,23 @@ function waitForTab(tabId) {
   });
 }
 
+function searchConfigFromUrl(rawUrl) {
+  if (!rawUrl) return null;
+  const url = new URL(rawUrl);
+  if (url.origin !== new URL(HOME_URL).origin || url.pathname !== SEARCH_PATH) return null;
+  const from = url.searchParams.get("fromcity")?.trim();
+  const to = url.searchParams.get("tocity")?.trim();
+  const dateInput = url.searchParams.get("doj")?.trim();
+  const seatClass = url.searchParams.get("class")?.trim();
+  if (!from || !to || !dateInput || !seatClass) return null;
+  return { from, to, dateInput, seatClass };
+}
+
+async function currentSearchConfig() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  return searchConfigFromUrl(tabs[0]?.url);
+}
+
 async function prepareOfficialTab() {
   const tabs = await chrome.tabs.query({ url: "https://eticket.railway.gov.bd/*" });
   let tab = tabs.find((candidate) => candidate.active) ?? tabs[0];
@@ -53,7 +71,7 @@ async function prepareOfficialTab() {
 
   await chrome.tabs.update(tab.id, { active: true });
   const currentUrl = new URL(tab.url ?? HOME_URL);
-  if (currentUrl.pathname !== "/") {
+  if (currentUrl.pathname !== "/" && currentUrl.pathname !== SEARCH_PATH) {
     const loading = waitForTab(tab.id);
     tab = await chrome.tabs.update(tab.id, { url: HOME_URL, active: true });
     await loading;
@@ -90,7 +108,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "GET_STATE") {
       const { assistantConfig = DEFAULT_CONFIG } = await chrome.storage.local.get("assistantConfig");
       const alarm = await chrome.alarms.get(ALARM_NAME);
-      return { ok: true, config: assistantConfig, armedFor: alarm?.scheduledTime ?? null };
+      const pageSearch = await currentSearchConfig();
+      return {
+        ok: true,
+        config: pageSearch ? { ...assistantConfig, ...pageSearch } : assistantConfig,
+        pageSearch,
+        armedFor: alarm?.scheduledTime ?? null,
+      };
     }
 
     if (message.type === "SAVE_CONFIG") {

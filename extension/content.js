@@ -13,6 +13,17 @@ const SELECTORS = {
 };
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const SEARCH_PATH = "/booking/train/search";
+
+function searchConfigFromLocation() {
+  if (location.pathname !== SEARCH_PATH) return null;
+  const params = new URLSearchParams(location.search);
+  const from = params.get("fromcity")?.trim();
+  const to = params.get("tocity")?.trim();
+  const dateInput = params.get("doj")?.trim();
+  const seatClass = params.get("class")?.trim();
+  return from && to && dateInput && seatClass ? { from, to, dateInput, seatClass } : null;
+}
 
 function showStatus(message, error = false) {
   let panel = document.querySelector("#rail-assistant-status");
@@ -209,6 +220,24 @@ function normalize(value) {
   return String(value ?? "").trim().toUpperCase().replace(/\s+/g, "");
 }
 
+function classAction(card, seatClass) {
+  const wanted = normalize(seatClass);
+  const labels = [...card.querySelectorAll("*")]
+    .filter((candidate) => candidate.offsetParent !== null && normalize(candidate.textContent) === wanted)
+    .sort((a, b) => a.children.length - b.children.length);
+
+  const candidates = [];
+  for (const label of labels) {
+    let ancestor = label;
+    for (let depth = 0; ancestor && ancestor !== card && depth < 6; depth += 1) {
+      const action = buttonByText(/book|view seats|select/i, ancestor);
+      if (action) candidates.push({ action, size: ancestor.textContent.length });
+      ancestor = ancestor.parentElement;
+    }
+  }
+  return candidates.sort((a, b) => a.size - b.size)[0]?.action ?? null;
+}
+
 function seatRecord(element, index) {
   const classText = String(element.className ?? "").toLowerCase();
   const label =
@@ -335,34 +364,39 @@ async function chooseTrain(config) {
   }
 
   if (!card) throw new Error(`Found ${config.train}, but could not identify its result card.`);
-  const action = buttonByText(/book|view seats|select/i, card);
+  const action = classAction(card, config.seatClass) ?? buttonByText(/book|view seats|select/i, card);
   if (!action) throw new Error(`No seat-selection button found for ${config.train}.`);
   action.click();
   return true;
 }
 
 async function run(config) {
+  config = { ...config, ...searchConfigFromLocation() };
   if (officialPageIsBlocked()) throw new Error("Cloudflare verification failed. Use the normal login page manually.");
   if (!signedIn()) throw new Error("Log in normally before running the assistant.");
-  if (location.pathname !== "/") throw new Error("Open the Rail Sheba home page before running.");
+  if (location.pathname === "/") {
+    showStatus("Preparing journey…");
+    await fillAutocomplete(SELECTORS.from, config.from);
+    await fillAutocomplete(SELECTORS.to, config.to);
+    await selectJourneyDate(config.dateInput);
 
-  showStatus("Preparing journey…");
-  await fillAutocomplete(SELECTORS.from, config.from);
-  await fillAutocomplete(SELECTORS.to, config.to);
-  await selectJourneyDate(config.dateInput);
+    const classSelect = await waitForSelector(SELECTORS.seatClass);
+    setNativeValue(classSelect, config.seatClass);
 
-  const classSelect = await waitForSelector(SELECTORS.seatClass);
-  setNativeValue(classSelect, config.seatClass);
-
-  const search = buttonByText(/search trains/i) ?? visibleButtons().find((button) => button.type === "submit");
-  if (!search) throw new Error("Search Trains button was not found.");
-  await waitForCondition(
-    () => !search.disabled && search.getAttribute("aria-disabled") !== "true",
-    "Rail Sheba kept Search Trains disabled. Recheck the selected From, To, journey date and class.",
-    5000,
-  );
-  showStatus("Submitting one journey search…");
-  search.click();
+    const search = buttonByText(/search trains/i) ?? visibleButtons().find((button) => button.type === "submit");
+    if (!search) throw new Error("Search Trains button was not found.");
+    await waitForCondition(
+      () => !search.disabled && search.getAttribute("aria-disabled") !== "true",
+      "Rail Sheba kept Search Trains disabled. Recheck the selected From, To, journey date and class.",
+      5000,
+    );
+    showStatus("Submitting one journey search…");
+    search.click();
+  } else if (location.pathname === SEARCH_PATH) {
+    showStatus(`Using the open ${config.from} → ${config.to} search…`);
+  } else {
+    throw new Error("Open the Rail Sheba home page or a train search-results page before running.");
+  }
 
   if (!(await chooseTrain(config))) return { message: "Search submitted; choose a train manually." };
 
