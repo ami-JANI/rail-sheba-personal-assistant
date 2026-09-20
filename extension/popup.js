@@ -53,10 +53,36 @@ function validate(config) {
   if (!Number.isInteger(config.passengerCount) || config.passengerCount < 1 || config.passengerCount > 4) {
     throw new Error("Seats must be from 1 to 4.");
   }
+  if (!config.train) {
+    throw new Error("Search on Rail Sheba, reopen this popup, and choose a train from the list.");
+  }
 }
 
-function populate(config) {
+function populateTrainOptions(trainNames, savedTrain) {
+  const select = document.querySelector("#train");
+  select.replaceChildren();
+  const prompt = document.createElement("option");
+  prompt.value = "";
+  prompt.textContent = trainNames.length ? "Choose a train…" : "Open Railway search results first";
+  select.append(prompt);
+
+  for (const trainName of trainNames) {
+    const option = document.createElement("option");
+    option.value = trainName;
+    option.textContent = trainName;
+    select.append(option);
+  }
+
+  const match = trainNames.find(
+    (trainName) => trainName.trim().toLowerCase() === String(savedTrain ?? "").trim().toLowerCase(),
+  );
+  select.value = match ?? "";
+  select.disabled = trainNames.length === 0;
+}
+
+function populate(config, trainNames = []) {
   for (const field of fields) {
+    if (field === "train") continue;
     const element = document.querySelector(`#${field}`);
     if (!element || config[field] == null) continue;
     if (field === "dryRun") element.checked = Boolean(config[field]);
@@ -65,6 +91,7 @@ function populate(config) {
       element.value = config[field].map((group) => group.join(", ")).join("\n");
     } else element.value = config[field];
   }
+  populateTrainOptions(trainNames, config.train);
 }
 
 async function command(type) {
@@ -94,12 +121,15 @@ document.querySelector("#disarm").addEventListener("click", () => command("DISAR
 
 const initial = await chrome.runtime.sendMessage({ type: "GET_STATE" });
 if (initial?.ok) {
-  populate(initial.config);
+  const trainNames = initial.trainNames ?? [];
+  populate(initial.config, trainNames);
   setStatus(
     initial.armedFor
       ? `Armed for ${new Date(initial.armedFor).toLocaleString()}`
       : initial.pageSearch
-        ? `Using open search: ${initial.pageSearch.from} → ${initial.pageSearch.to}, ${initial.pageSearch.dateInput}, ${initial.pageSearch.seatClass}.`
+        ? trainNames.length
+          ? `Found ${trainNames.length} train(s). Choose one for ${initial.pageSearch.from} → ${initial.pageSearch.to}.`
+          : "The search page is open, but its train list is not ready. Wait for it to load, then reopen this popup."
         : "Not armed. Test with Dry run and Run now first.",
   );
 } else {

@@ -54,9 +54,20 @@ function searchConfigFromUrl(rawUrl) {
   return { from, to, dateInput, seatClass };
 }
 
-async function currentSearchConfig() {
+async function currentPageContext() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  return searchConfigFromUrl(tabs[0]?.url);
+  const tab = tabs[0];
+  const pageSearch = searchConfigFromUrl(tab?.url);
+  if (!tab?.id || !pageSearch) return { pageSearch, trainNames: [] };
+  try {
+    const context = await chrome.tabs.sendMessage(tab.id, { type: "GET_PAGE_CONTEXT" });
+    return {
+      pageSearch: context?.pageSearch ?? pageSearch,
+      trainNames: Array.isArray(context?.trainNames) ? context.trainNames : [],
+    };
+  } catch {
+    return { pageSearch, trainNames: [] };
+  }
 }
 
 async function prepareOfficialTab() {
@@ -108,11 +119,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "GET_STATE") {
       const { assistantConfig = DEFAULT_CONFIG } = await chrome.storage.local.get("assistantConfig");
       const alarm = await chrome.alarms.get(ALARM_NAME);
-      const pageSearch = await currentSearchConfig();
+      const { pageSearch, trainNames } = await currentPageContext();
       return {
         ok: true,
         config: pageSearch ? { ...assistantConfig, ...pageSearch } : assistantConfig,
         pageSearch,
+        trainNames,
         armedFor: alarm?.scheduledTime ?? null,
       };
     }

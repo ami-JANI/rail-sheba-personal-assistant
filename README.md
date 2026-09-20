@@ -23,7 +23,7 @@ The assistant deliberately stops before reservation confirmation, CAPTCHA and pa
 7. Keep **Dry run** enabled and click **Run now** for the first test.
 8. When the dry run works, disable it and click **Arm** for a future release time.
 
-You can also search manually on Rail Sheba first and leave its train-results page open. The extension reads the From, To, journey date and class from that page's URL, skips the home-page form, and uses the remaining saved preferences to choose the configured train and seats.
+You can also search manually on Rail Sheba first and leave its train-results page open. The extension reads the From, To, journey date and class from that page's URL, skips the home-page form, and fills its Train dropdown with the trains actually shown. Choose a train from that list before using **Run now** or **Arm**. A saved train that is absent from the current results is never selected automatically.
 
 After pulling an update, return to `edge://extensions` and click **Reload** on the unpacked extension before testing it again.
 

@@ -25,6 +25,20 @@ function searchConfigFromLocation() {
   return from && to && dateInput && seatClass ? { from, to, dateInput, seatClass } : null;
 }
 
+function trainNamesFromPage() {
+  if (location.pathname !== SEARCH_PATH) return [];
+  const candidates = [
+    ...[...document.querySelectorAll("h1, h2, h3, h4, h5, h6")].map(
+      (heading) => heading.textContent?.trim() ?? "",
+    ),
+    ...(document.body?.innerText.split(/\r?\n/) ?? []),
+  ];
+  const names = candidates
+    .map((text) => text.match(/^(.+?)\s*\(\d+\)\s*$/)?.[1]?.trim())
+    .filter((name) => name && name.length <= 80 && /[A-Za-z]/.test(name));
+  return [...new Map(names.map((name) => [normalize(name), name])).values()];
+}
+
 function showStatus(message, error = false) {
   let panel = document.querySelector("#rail-assistant-status");
   if (!panel) {
@@ -423,6 +437,14 @@ async function run(config) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === "GET_PAGE_CONTEXT") {
+    sendResponse({
+      ok: true,
+      pageSearch: searchConfigFromLocation(),
+      trainNames: trainNamesFromPage(),
+    });
+    return false;
+  }
   if (message.type !== "RUN_ASSISTANT") return false;
   run(message.config)
     .then((result) => sendResponse({ ok: true, ...result }))
