@@ -8,8 +8,8 @@ const SELECTORS = {
   searchButton: "button",
   trainCard: "app-train-card, .train-card, .single-trip, .train-item, [data-train-name]",
   trainAction: "button",
-  coachTab: "[role='tab'], .coach-tab, button[data-coach]",
-  seat: "[data-seat-no], [data-seat-number], button.seat, .seat-item button",
+  coachTab: ".seat-floor-btn, [role='tab'], .coach-tab, button[data-coach]",
+  seat: "button.btn-seat, button[ticketid][routeid], [data-seat-no], [data-seat-number], button.seat, .seat-item button",
 };
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -257,21 +257,31 @@ function seatRecord(element, index) {
   const label =
     element.getAttribute("data-seat-no") ??
     element.getAttribute("data-seat-number") ??
-    element.getAttribute("aria-label") ??
     element.getAttribute("title") ??
+    element.getAttribute("aria-label") ??
     element.textContent?.trim() ??
     "";
   const normalized = normalize(label);
   const numericMatch = normalized.match(/(\d+)(?!.*\d)/);
-  const row = numericMatch
+  const labelRow = numericMatch
     ? normalized.slice(0, numericMatch.index).replace(/[-_/]+$/g, "")
     : normalized;
+  const seatBlock = element.closest(".seat-in-row");
+  const seatBlockIndex = seatBlock
+    ? [...document.querySelectorAll(".seat-in-row")].indexOf(seatBlock)
+    : -1;
+  const row = seatBlockIndex >= 0 ? `BLOCK-${seatBlockIndex}` : labelRow;
   const unavailable =
     classText.includes("booked") ||
     classText.includes("unavailable") ||
     classText.includes("disabled") ||
+    classText.includes("request_pending") ||
+    classText.includes("in-progress") ||
+    classText.includes("seat-hidden") ||
+    classText.includes("seat-selected") ||
     element.getAttribute("aria-disabled") === "true" ||
     element.disabled;
+  const railwaySeat = element.classList.contains("btn-seat");
   return {
     element,
     index,
@@ -280,7 +290,7 @@ function seatRecord(element, index) {
     row,
     number: Number(numericMatch?.[1] ?? Number.NaN),
     coach: normalize(element.getAttribute("data-coach") ?? "ACTIVE"),
-    available: !unavailable,
+    available: railwaySeat ? element.classList.contains("seat-available") && !unavailable : !unavailable,
   };
 }
 
